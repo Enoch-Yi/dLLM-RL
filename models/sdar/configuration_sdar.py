@@ -126,21 +126,12 @@ class SDARConfig(PretrainedConfig):
     model_type = "sdar"
     keys_to_ignore_at_inference = ["past_key_values"]
 
-    # Default tensor parallel plan for base model `SDAR`
-    base_model_tp_plan = {
-        "layers.*.self_attn.q_proj": "colwise",
-        "layers.*.self_attn.k_proj": "colwise",
-        "layers.*.self_attn.v_proj": "colwise",
-        "layers.*.self_attn.o_proj": "rowwise",
-        "layers.*.mlp.gate_proj": "colwise",
-        "layers.*.mlp.up_proj": "colwise",
-        "layers.*.mlp.down_proj": "rowwise",
-    }
-    base_model_pp_plan = {
-        "embed_tokens": (["input_ids"], ["inputs_embeds"]),
-        "layers": (["hidden_states", "attention_mask"], ["hidden_states"]),
-        "norm": (["hidden_states"], ["hidden_states"]),
-    }
+    # NeDA patch (RAIDEN alpha torch): transformers post_init 把 tp_plan 的值与
+    # ALL_PARALLEL_STYLES 比对,而后者在 NGC 2410 alpha torch 下是 None →
+    # "argument of type 'NoneType' is not iterable"。tp/pp plan 只用于多 GPU 张量/
+    # 流水并行,设 None 跳过该检查(deepspeed zero3 自己做分片,不需要 HF 的 tp_plan)。
+    base_model_tp_plan = None
+    base_model_pp_plan = None
 
     def __init__(
         self,

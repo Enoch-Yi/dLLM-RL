@@ -1,0 +1,49 @@
+{
+  "contract_version": "neda-seeds-v1",
+  "frozen_at": "2026-07-15",
+  "notes": [
+    "train_seed controls parameter initialization/dropout/data sharding only",
+    "rollout_seed is expanded per game/replica/turn so task order cannot shift sampling RNG",
+    "mask_seed controls learner masks and must stay paired across U0-U4",
+    "sample_order_seed controls cached learner order and must stay paired across method variants",
+    "eval_seeds are shared across every compared checkpoint; they are eval repeats, not train seeds"
+  ],
+  "phases": {
+    "screening": [
+      {
+        "replicate": 0,
+        "train_seed": 12001,
+        "rollout_seed": 22001,
+        "mask_seed": 32001,
+        "sample_order_seed": 42001,
+        "eval_seeds": [52001, 52002, 52003, 52004, 52005, 52006, 52007, 52008]
+      }
+    ],
+    "submission": [
+      {
+        "replicate": 0,
+        "train_seed": 12001,
+        "rollout_seed": 22001,
+        "mask_seed": 32001,
+        "sample_order_seed": 42001,
+        "eval_seeds": [52001, 52002, 52003, 52004, 52005, 52006, 52007, 52008]
+      },
+      {
+        "replicate": 1,
+        "train_seed": 12002,
+        "rollout_seed": 22002,
+        "mask_seed": 32002,
+        "sample_order_seed": 42002,
+        "eval_seeds": [52001, 52002, 52003, 52004, 52005, 52006, 52007, 52008]
+      },
+      {
+        "replicate": 2,
+        "train_seed": 12003,
+        "rollout_seed": 22003,
+        "mask_seed": 32003,
+        "sample_order_seed": 42003,
+        "eval_seeds": [52001, 52002, 52003, 52004, 52005, 52006, 52007, 52008]
+      }
+    ]
+  }
+}

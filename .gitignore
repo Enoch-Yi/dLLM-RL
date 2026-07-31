@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.log
+*.out
+*.err
+core
+core.*
+
+# NeDA runtime products are intentionally outside source control.
+artifacts/
+runs/
+checkpoints/
+sft_neda/ckpt/
+wandb/
+
+# Large local benchmark/model assets.
+data/sft_alfworld_expert.json
+*.safetensors
+*.tar
+*.tar.gz

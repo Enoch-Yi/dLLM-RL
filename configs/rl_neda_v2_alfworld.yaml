@@ -1,0 +1,58 @@
+wandb:
+  entity: null
+  resume: 'auto'
+
+experiment:
+  save_epoch_checkpoint: false
+  project: "/ABSOLUTE/PATH/TO/RUN/policy_update"
+  current_epoch: 1
+  save_every: 1
+  num_node: 1
+
+model:
+  pretrained_model: "/home/zhangzy/yinuo_dLLM/TraceRL/dLLM-RL/sft_neda/ckpt/neda_sft_v1"
+  optimized_name: "neda_v2_policy"
+
+dataset:
+  thought_optimization_path: "/ABSOLUTE/PATH/TO/thought_learner.json"
+  action_optimization_path: "/ABSOLUTE/PATH/TO/action_learner.json"
+
+training:
+  gradient_checkpointing_enable: true
+  gradient_accumulation_steps: 8
+  batch_size_lm: 1
+  mixed_precision: "bf16"
+  enable_tf32: false
+  train_seed: 12001
+  seed: 12001
+  sample_order_seed: 42001
+  num_train_epochs: 1
+  max_grad_norm: 1.0
+  method: "exact_multitrace"
+  registered_method: "neda"
+  thought_block_size: 4
+  thought_rollout_replay_tolerance: 0.05
+  action_rollout_replay_tolerance: 0.05
+  position_rollout_replay_tolerance: 0.05
+  replay_diagnostic_top_k: 64
+  max_native_replay_rows: 0
+  position_head_path: ""
+  position_head_seed: 0
+  eps: 0.2
+
+optimizer:
+  name: "adamw"
+  params:
+    learning_rate: 2.0e-6
+    scale_lr: false
+    beta1: 0.9
+    beta2: 0.999
+    weight_decay: 0.0
+    epsilon: 1.0e-8
+
+lr_scheduler:
+  scheduler: "cosine"
+  params:
+    learning_rate: ${optimizer.params.learning_rate}
+    warmup_steps: 0
+    min_lr_scale: 1.0

@@ -1,0 +1,87 @@
+{
+  "contract_version": "neda-webshop-assets-v1",
+  "frozen_at": "2026-07-19",
+  "data_files": [
+    {
+      "path": "DiffuAgent/DiffuAgent/unified_envs/AgentBoard/agentboard/data/webshop/data/items_shuffle.json",
+      "size_bytes": 5479720229,
+      "sha256": "2ef591d65df3af89e972ab72468eb82cbf124d876552d9f3678667edd620a6c8"
+    },
+    {
+      "path": "DiffuAgent/DiffuAgent/unified_envs/AgentBoard/agentboard/data/webshop/data/items_ins_v2.json",
+      "size_bytes": 186295270,
+      "sha256": "1d36af476bdb8f82a5da62bd8acdabe54cd8de2fa84010d37da5c4890feb447e"
+    },
+    {
+      "path": "DiffuAgent/DiffuAgent/unified_envs/AgentBoard/agentboard/data/webshop/data/items_human_ins.json",
+      "size_bytes": 5137548,
+      "sha256": "cf78667548a71786e1d9049c24b802e48e1084ad4bb021cae56ce1f6d96954a3"
+    },
+    {
+      "path": "DiffuAgent/DiffuAgent/unified_envs/AgentBoard/agentboard/data/webshop/test.jsonl",
+      "size_bytes": 180071,
+      "sha256": "23a79385045907ec009a44a3b85a477aafc5545494ee050439adb5ef192a1a41"
+    }
+  ],
+  "index": {
+    "root": "/home/zhangzy/branching_dueling_webshop_alfworld_on_RIKEN/past_folder/WebShop/search_engine/indexes",
+    "source_items_sha256": "2ef591d65df3af89e972ab72468eb82cbf124d876552d9f3678667edd620a6c8",
+    "source_items_count": 1181430,
+    "expected_documents": 1181370,
+    "source_minus_live_documents": 60,
+    "file_set_sha256": "de5859c54e50a5fd820ecd9f7e1046060fc3f52a9e3f58e34bd26c59482b23ee",
+    "files": [
+      {"name": "_0.fdm", "size_bytes": 3603, "sha256": "8f2ded6d1700b393982dc2d09d4bac31750ee2c956b8e46c800b7f41af50f405"},
+      {"name": "_0.fdt", "size_bytes": 2754969236, "sha256": "47de849b9d20866fa3475379f7062630430985d3cc5c73baa0782551a8fc48e1"},
+      {"name": "_0.fdx", "size_bytes": 292279, "sha256": "40acc5fa18cfa6957803671861afa6a5a69e63a82e5c5606c9e0e774d235e2e9"},
+      {"name": "_0.fnm", "size_bytes": 343, "sha256": "811857106394ce5bfab48816f719ce1a482e9acb3824dc765bb53d0e8261b4fc"},
+      {"name": "_0.nvd", "size_bytes": 1181429, "sha256": "29ea5466eb045e5ff74d9016c337845976e9b50023d949252d1bdefff74fb494"},
+      {"name": "_0.nvm", "size_bytes": 103, "sha256": "f0640fdc97125f4ca0b4a49dc570195893df0f7d54fb15111a07919c95c49057"},
+      {"name": "_0.si", "size_bytes": 508, "sha256": "424d18665fee0d7ec32f45dcdd61ea3ba34e64e080957e1fe06874f18bb133b0"},
+      {"name": "_0.tvd", "size_bytes": 538603314, "sha256": "faac1ffc598579fa5c8d10c7f976a053be7404391bea62a6e4569c74b576ebbf"},
+      {"name": "_0.tvm", "size_bytes": 3272, "sha256": "2512d0755618ebcad71f16f753726104ebcb4b12aa052b012d1beab5ea1bc441"},
+      {"name": "_0.tvx", "size_bytes": 227577, "sha256": "1b77c1b9442d0f974f55a1d517cac43d6624cda0e9b0c35da4a93bee2a7388ff"},
+      {"name": "_0_Lucene90_0.dvd", "size_bytes": 11813773, "sha256": "965fc32cc641164f7ae055c22492c660459e12ed429e23395384042f34ac0a30"},
+      {"name": "_0_Lucene90_0.dvm", "size_bytes": 133, "sha256": "b0c7f0ed09b1d32b2930e0eaa453e2aa0192b0bbaaf1f9f23ce1043850a514e4"},
+      {"name": "_0_Lucene99_0.doc", "size_bytes": 133038329, "sha256": "cadb5d667adf566253f257682b0f7e1a276995936bca3e3591ff9d1f8c6744b4"},
+      {"name": "_0_Lucene99_0.pos", "size_bytes": 141375940, "sha256": "5f45b36e7733973c9a666c35de4b44d1e185bdb2fbd7053eb9e5d8cecdea035c"},
+      {"name": "_0_Lucene99_0.tim", "size_bytes": 21730603, "sha256": "22c2eb70c61766a8065ecb8b5871036b7a6bc9ce0826a7003b0bcc887ee33e3b"},
+      {"name": "_0_Lucene99_0.tip", "size_bytes": 547004, "sha256": "23235147355b028cda8803bb0cc11a4a1610f420233edd85fe1ce1f471419a64"},
+      {"name": "_0_Lucene99_0.tmd", "size_bytes": 318, "sha256": "af89e4d248029647868903a71c743d67ea59dfd0b7f49f5258229f9ab44e33ce"},
+      {"name": "segments_1", "size_bytes": 154, "sha256": "747bc6296edca9dc5ef9a8cc1f02617e70dad63d8f1d8840768105952444d892"}
+    ]
+  },
+  "runtime": {
+    "python_user_site": "/home/zhangzy/.raiden/nvcr-pytorch-2310-py3/lib/python3.10/site-packages",
+    "pyserini_version": "0.39.0",
+    "spacy_version": "3.7.5",
+    "spacy_model": "en_core_web_sm",
+    "spacy_model_version": "3.7.1",
+    "java_distribution": "Eclipse Temurin",
+    "java_version": "21.0.11+10",
+    "java_home": "/home/zhangzy/.raiden/temurin-jre-21.0.11+10",
+    "java_binary_sha256": "fd85538801d8ca61d3558c87a57a600e1868d8ac9e918d0860dd64281b548643",
+    "libjvm_sha256": "26d9fefbe1dc56b5e6c2cf3a825c09c1dc394d885bdccb778b338a76debe62ae",
+    "jre_archive_sha256": "e5038aae3ca9ff670bc696496b0728dbd23d280026bad30291cb919221ecfdcb",
+    "webshop_server_seed": 93001,
+    "requires_compute_node_probe": true
+  },
+  "server_sources": [
+    {
+      "path": "DiffuAgent/DiffuAgent/unified_envs/AgentBoard/agentboard/environment/WebShop/web_agent_site/utils.py",
+      "sha256": "a2aa4e5142762e6566e25303dc02a5f721eb8342fa9b11e2424e804903278dac"
+    },
+    {
+      "path": "DiffuAgent/DiffuAgent/unified_envs/AgentBoard/agentboard/environment/WebShop/web_agent_site/engine/engine.py",
+      "sha256": "9a8496868f84934f9755be694faa134ef631972570d6d2e9b9b612ef9723b941"
+    },
+    {
+      "path": "DiffuAgent/DiffuAgent/unified_envs/AgentBoard/agentboard/environment/WebShop/web_agent_site/engine/goal.py",
+      "sha256": "fb29fc2fa24a376f49fc329d66040944e9016a2a418044d58092c6347ce14965"
+    },
+    {
+      "path": "DiffuAgent/DiffuAgent/unified_envs/AgentBoard/agentboard/environment/WebShop/web_agent_site/app.py",
+      "sha256": "23e9f87c0270f70011e3a16b69e26e44a767fd507cb038732773885f30251d4e"
+    }
+  ]
+}

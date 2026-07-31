@@ -1,0 +1,44 @@
+{
+  "contract_version": "neda-alfworld-splits-v1",
+  "frozen_at": "2026-07-15",
+  "policy": {
+    "model_selection_split": "dev_seen",
+    "locked_confirmation_split": "final_unseen",
+    "final_access": "only after method/config freeze",
+    "caveat": "final_unseen was exposed to legacy runs; require a second environment or untouched task seeds for pristine confirmation"
+  },
+  "splits": {
+    "dev_seen": {
+      "role": "development/model selection",
+      "historically_exposed": false,
+      "source_root_hint": "/home/zhangzy/.cache/alfworld/json_2.1.1/valid_seen",
+      "selection_rule": "ALFWorld task_types 1-6; solvable; exclude movable/Sliced; canonical sort",
+      "n_games": 140,
+      "game_ids_sha256": "ed615478122be09ab6ae422c193ff19e143b2756300c1c4b0cd6631724502b01",
+      "task_type_counts": {
+        "look_at_obj_in_light": 13,
+        "pick_and_place_simple": 35,
+        "pick_clean_then_place_in_recep": 27,
+        "pick_cool_then_place_in_recep": 25,
+        "pick_heat_then_place_in_recep": 16,
+        "pick_two_obj_and_place": 24
+      }
+    },
+    "final_unseen": {
+      "role": "locked legacy confirmation",
+      "historically_exposed": true,
+      "source_root_hint": "/home/zhangzy/.cache/alfworld/json_2.1.1/valid_unseen",
+      "selection_rule": "ALFWorld task_types 1-6; solvable; exclude movable/Sliced; canonical sort",
+      "n_games": 134,
+      "game_ids_sha256": "0a6038aa04ae2125032bfc9bb912f2dd66b569dd4546d471d4ba88f1ce9f5d6d",
+      "task_type_counts": {
+        "look_at_obj_in_light": 18,
+        "pick_and_place_simple": 24,
+        "pick_clean_then_place_in_recep": 31,
+        "pick_cool_then_place_in_recep": 21,
+        "pick_heat_then_place_in_recep": 23,
+        "pick_two_obj_and_place": 17
+      }
+    }
+  }
+}

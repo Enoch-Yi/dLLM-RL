@@ -1,0 +1,69 @@
+{
+  "contract_version": "neda-v2-alfworld-budget-v1",
+  "status": "FROZEN",
+  "method": "neda_v2",
+  "base_model": "/home/zhangzy/yinuo_dLLM/TraceRL/dLLM-RL/sft_neda/ckpt/neda_sft_v1",
+  "initialization": "canonical full-parameter Agentic-SFT epoch-3 checkpoint; fresh RL AdamW state; no LoRA",
+  "initialization_profile": "alfworld-agentic-sft-ep3-v1",
+  "rl_training_pool": {
+    "contract_version": "neda-sft-disjoint-alfworld-train-v1",
+    "total_train_games": 3553,
+    "excluded_sorted_prefix_games": 1000,
+    "eligible_rl_games": 2553,
+    "exact_game_overlap_with_sft": 0
+  },
+  "matched_reference": {
+    "methods": ["neda_v1", "mapg"],
+    "train_seed": 12001,
+    "iterations": 3,
+    "games_per_iteration": 8,
+    "group_size": 8,
+    "max_environment_steps": 30,
+    "thought_length": 64
+  },
+  "shared": {
+    "full_parameter_update": true,
+    "optimizer": "AdamW",
+    "learning_rate": 2e-6,
+    "ppo_clip": 0.2,
+    "position_temperature": 0.5,
+    "token_temperature": 1.0,
+    "block_length": 4,
+    "denoising_steps": 4,
+    "thought_order": "AO",
+    "action_order": "AR",
+    "action_grammar": "exact admissible-command trie",
+    "execution_policy": "raw Action equals executed Action",
+    "episode_credit": "within-game GRPO standardized terminal return",
+    "turn_credit": "A_i / H_i"
+  },
+  "formal": {
+    "iterations": 3,
+    "games_per_iteration": 8,
+    "group_size": 8,
+    "max_environment_steps": 30,
+    "thought_length": 64,
+    "credit_boundaries": 4,
+    "max_native_replay_rows": 0,
+    "engineering_signal_if_zero": false,
+    "require_policy_update_signal": true,
+    "scientific_result": true,
+    "train_seed": 12001
+  },
+  "neda_v2": {
+    "evidence": "exact executed-vs-other-legal Action log-odds under the frozen admissible-command Trie",
+    "other_legal_mass": "1 - p(executed Action)",
+    "step_allocation": "softmax of successive legal-Action margin gains over four StepMerge boundaries",
+    "interpolation_lambda": 0.5,
+    "evidence_temperature": 0.25,
+    "critic": false,
+    "mass_conserving": true
+  },
+  "evaluation": {
+    "split": "final_unseen",
+    "n_games": 134,
+    "samples_per_task": 1,
+    "temperature": 0.3,
+    "paired_eval_seed": 62001
+  }
+}

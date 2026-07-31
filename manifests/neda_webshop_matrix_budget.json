@@ -1,0 +1,103 @@
+{
+  "contract_version": "neda-webshop-method-matrix-budget-v1",
+  "status": "FROZEN",
+  "environment": "webshop",
+  "train_seed": 12001,
+  "initializations": {
+    "base": {
+      "model": "/home/zhangzy/.raiden/neda-2410/models/SDAR-8B-Chat",
+      "label": "SDAR-8B-Chat + online RL",
+      "supervised_webshop_data": false
+    },
+    "sft": {
+      "model": "/home/zhangzy/yinuo_dLLM/TraceRL/dLLM-RL/sft_neda/ckpt/neda_sft_v1",
+      "label": "ALFWorld Agentic-SFT transfer + online RL",
+      "provenance_data": "/home/zhangzy/yinuo_dLLM/TraceRL/dLLM-RL/data/sft_alfworld_expert.json",
+      "provenance_data_sha256": "52d0381024c4414c6d6050d98135232c985fb47a052d23583ee2c302d5e34d4c",
+      "supervised_webshop_data": false,
+      "claim_boundary": "This is a cross-environment Agentic-SFT transfer initialization, not WebShop-supervised SFT."
+    }
+  },
+  "methods": [
+    "mapg",
+    "dcolt",
+    "neda_v2"
+  ],
+  "topologies": {
+    "4gpu": {
+      "job_class": "gtb-container_g4",
+      "role": "matched-budget topology diagnostic",
+      "primary_result": false
+    },
+    "8gpu": {
+      "job_class": "gtn-container_g8",
+      "role": "primary training and evaluation result",
+      "primary_result": true
+    }
+  },
+  "shared_training": {
+    "full_parameter_update": true,
+    "optimizer": "AdamW",
+    "learning_rate": 2e-06,
+    "ppo_clip": 0.2,
+    "iterations": 3,
+    "tasks_per_iteration": 8,
+    "group_size": 8,
+    "rollouts_per_method": 192,
+    "max_environment_steps": 20,
+    "thought_length": 64,
+    "action_length": 64,
+    "block_length": 4,
+    "denoising_steps": 4,
+    "thought_order": "AO",
+    "action_order": "AR",
+    "action_grammar": "canonical WebShop finite-action trie",
+    "execution_policy": "raw canonical Action mapped only by whitespace-preserving backend equivalence",
+    "reward": "AgentBoard WebShop progress score in [0,1]",
+    "group_advantage": "within-task standardized final progress",
+    "effective_gradient_accumulation_target": 64,
+    "max_native_replay_rows": 0,
+    "engineering_signal_if_zero": false,
+    "require_policy_update_signal": true
+  },
+  "smoke": {
+    "world_size": 1,
+    "iterations": 1,
+    "tasks_per_iteration": 1,
+    "group_size": 2,
+    "max_environment_steps": 2,
+    "thought_length": 32,
+    "action_length": 64,
+    "max_native_replay_rows": 16,
+    "engineering_signal_if_zero": true,
+    "scientific_result": false
+  },
+  "evaluation": {
+    "split": "final_confirm",
+    "n_tasks": 51,
+    "samples_per_task": 4,
+    "eval_seed": 52001,
+    "metrics": [
+      "mean score",
+      "Success@1",
+      "Success@4"
+    ]
+  },
+  "neda_v2": {
+    "turn_credit": "within-task GRPO advantage divided by episode horizon",
+    "evidence": "successive legal-Action margin gains at recorded Thought denoising commitments",
+    "step_allocation": "mass-conserving uniform/evidence interpolation",
+    "interpolation_lambda": 0.5,
+    "evidence_temperature": 0.25,
+    "critic": false
+  },
+  "registered_neda_ablations": {
+    "uniform": "set evidence interpolation lambda to 0",
+    "evidence_only": "set evidence interpolation lambda to 1",
+    "no_position": "remove the unmask-position likelihood ratio",
+    "token_only": "remove both the unmask-position ratio and Action-coordinate credit",
+    "no_horizon": "copy episode advantage to every turn instead of conserving episode coefficient mass",
+    "executed_action_v1": "legacy NeDA-v1 executed-Action log-probability evidence; run through method neda",
+    "random_path": "expected-failure exact-replay diagnostic only; never a training result"
+  }
+}

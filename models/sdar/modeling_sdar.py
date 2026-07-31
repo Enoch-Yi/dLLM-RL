@@ -21,6 +21,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from typing import Callable, Optional, Tuple, Union
 
 import torch
@@ -70,6 +71,22 @@ if is_torch_flex_attn_available():
 logger = logging.get_logger(__name__)
 
 
+def neda_reference_rmsnorm_forward(module, hidden_states):
+    """Deterministic FP32 RMSNorm used by recorded-path policy forwards.
+
+    This function intentionally lives outside ``SDARRMSNorm.forward``.  The
+    Transformers hub-kernel decorator can replace the class method at runtime;
+    exact replay temporarily installs this function on the class itself so
+    rollout and DeepSpeed learner cannot take different decorator branches.
+    """
+
+    input_dtype = hidden_states.dtype
+    values = hidden_states.float()
+    variance = values.pow(2).mean(-1, keepdim=True)
+    values = values * torch.rsqrt(variance + module.variance_epsilon)
+    return module.weight * values.to(input_dtype)
+
+
 @use_kernel_forward_from_hub("RMSNorm")
 class SDARRMSNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
@@ -81,6 +98,14 @@ class SDARRMSNorm(nn.Module):
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):
+        # Triton's fused RMSNorm is repeatable within one process, but its
+        # independently autotuned kernels produced materially different logits
+        # across RAIDEN rollout/learner processes.  Exact-path policy forwards
+        # opt into this deterministic reference operator through the scoped
+        # environment flag managed by ``exact_replay_numerics``.  Non-exact
+        # inference and legacy training retain the fused implementation.
+        if os.environ.get("NEDA_EXACT_PURE_RMSNORM") == "1":
+            return neda_reference_rmsnorm_forward(self, hidden_states)
         return flash_rms_norm(
             hidden_states, weight=self.weight, bias=None, eps=self.variance_epsilon)
         '''
@@ -306,16 +331,26 @@ class SDARAttention(nn.Module):
         key_states   = repeat_kv(key_states,   self.num_key_value_groups)  # [B, H, K, D]
         value_states = repeat_kv(value_states, self.num_key_value_groups)  # [B, H, K, D]
 
-        # --- Convert a 0/1 or bool 4D mask into an *additive* mask, and align to [B, H, Q, K] ---
+        # --- Convert a 0/1 or bool mask into an additive [B, H, Q, K] mask ---
         attn_mask = None
         if attention_mask is not None:
             k_len = key_states.shape[-2]
             am = attention_mask
-            # Support either 2D [B, K] or 4D [B, 1/H, Q, K]
+            # The canonical block-diffusion interface is 4D.  Keep explicit
+            # support for legacy 3D [B,Q,K] callers by inserting the broadcast
+            # head dimension; silently treating every non-2D mask as 4D caused
+            # an opaque IndexError in the first G0 forward.
             if am.dim() == 2:
                 am = am[:, None, None, :k_len]             # -> [B,1,1,K]
-            else:
+            elif am.dim() == 3:
+                am = am[:, None, :, :k_len]                # -> [B,1,Q,K]
+            elif am.dim() == 4:
                 am = am[:, :, :, :k_len]                   # -> [B,1/H,Q,K]
+            else:
+                raise ValueError(
+                    "SDAR attention_mask must have rank 2, 3, or 4; got shape {}"
+                    .format(tuple(am.shape))
+                )
 
             finfo_min = torch.finfo(query_states.dtype).min
             # 0/1 or bool -> float additive mask: 1->0, 0->-inf
@@ -338,27 +373,22 @@ class SDARAttention(nn.Module):
 
         bsz, q_len = input_shape
 
-        if q_len == 1 and past_key_value is not None:
-            # --- Decoding: flash-attn ---
-            q = query_states.transpose(1, 2)  # [B,Q,H,D]
-            k = key_states.transpose(1, 2)
-            v = value_states.transpose(1, 2)
-            attn_output = flash_attn_func(
-                q, k, v,
-                causal=True,                # For decoding, explicitly set causal=True
-                softmax_scale=self.scaling
-            )
-            attn_output = attn_output.transpose(1, 2).contiguous()
-        else:
-            attn_output = F.scaled_dot_product_attention(
-                query=query_states,         # [B,H,Q,D]
-                key=key_states,             # [B,H,K,D]
-                value=value_states,         # [B,H,K,D]
-                attn_mask=attn_mask,        # float additive mask
-                is_causal=False,            # All constraints are already encoded in the mask
-                scale=self.scaling,
-            )
-            attn_output = attn_output.transpose(1, 2).contiguous()  # -> [B,Q,H,D]
+        # Exact-path PPO requires the cached behavior rollout and the full-row
+        # learner replay to use the same numerical attention operator.  The old
+        # q_len==1 cache branch used flash_attn_func while full replay used SDPA;
+        # that changed the first Action-token log-probability by 0.093 even
+        # though the mathematical mask was identical.  KV caching is retained,
+        # but every query shape now goes through the same SDPA path and the
+        # explicit block mask remains the sole source of causality.
+        attn_output = F.scaled_dot_product_attention(
+            query=query_states,         # [B,H,Q,D]
+            key=key_states,             # [B,H,K,D]
+            value=value_states,         # [B,H,K,D]
+            attn_mask=attn_mask,        # float additive mask
+            is_causal=False,            # All constraints are already encoded in the mask
+            scale=self.scaling,
+        )
+        attn_output = attn_output.transpose(1, 2).contiguous()  # -> [B,Q,H,D]
 
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
         attn_output = self.o_proj(attn_output)
@@ -477,6 +507,33 @@ class SDARRotaryEmbedding(nn.Module):
             self.config, device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         self.original_inv_freq = self.inv_freq
+
+    def _apply(self, fn, recurse=True):
+        """Move RoPE state without reducing its frequency precision.
+
+        DeepSpeed initializes a BF16 engine by calling ``module.bfloat16()``.
+        PyTorch applies that conversion to non-persistent buffers as well as
+        parameters, so the default implementation changed ``inv_freq`` from
+        FP32 to BF16.  At long agent prefixes that quantization changed an
+        authenticated behavior log-probability by 0.163274 even though all
+        model parameters were identical.  RoPE frequencies are coordinate
+        state, not trainable low-precision weights; preserve their FP32 values
+        while still following every requested device move.
+        """
+
+        source = self.inv_freq
+        result = super()._apply(fn, recurse=recurse)
+        target = self.inv_freq
+        if source.device.type == "meta":
+            restored, self.attention_scaling = self.rope_init_fn(
+                self.config, target.device
+            )
+            restored = restored.float()
+        else:
+            restored = source.to(device=target.device, dtype=torch.float32)
+        self._buffers["inv_freq"] = restored
+        self.original_inv_freq = restored
+        return result
 
     @torch.no_grad()
     # power user: used with advanced RoPE types (e.g. dynamic rope)
