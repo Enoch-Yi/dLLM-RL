@@ -1,0 +1,73 @@
+{
+  "contract_version": "neda-joint-alfworld-budget-v1",
+  "status": "FROZEN",
+  "base_model": "/home/zhangzy/.raiden/neda-2410/models/SDAR-8B-Chat",
+  "initialization": "original SDAR-8B-Chat; no SFT and no LoRA",
+  "methods": ["neda", "mapg", "dcolt"],
+  "train_seeds": [12001, 12002, 12003],
+  "shared": {
+    "full_parameter_update": true,
+    "optimizer": "AdamW",
+    "learning_rate": 2e-6,
+    "ppo_clip": 0.2,
+    "position_temperature": 0.5,
+    "token_temperature": 1.0,
+    "block_length": 4,
+    "denoising_steps": 4,
+    "thought_order": "AO",
+    "action_order": "AR",
+    "action_grammar": "exact admissible-command trie",
+    "execution_policy": "raw Action equals executed Action"
+  },
+  "smoke": {
+    "iterations": 1,
+    "games_per_iteration": 1,
+    "group_size": 2,
+    "max_environment_steps": 2,
+    "thought_length": 32,
+    "neda_credit_boundaries": 2,
+    "learner_boundaries_per_thought": 2,
+    "max_native_replay_rows": 16,
+    "engineering_signal_if_zero": true,
+    "scientific_result": false
+  },
+  "formal": {
+    "iterations": 3,
+    "games_per_iteration": 8,
+    "group_size": 8,
+    "max_environment_steps": 30,
+    "thought_length": 64,
+    "neda_credit_boundaries": 4,
+    "learner_boundaries_per_thought": 4,
+    "max_native_replay_rows": 0,
+    "engineering_signal_if_zero": false,
+    "require_policy_update_signal": true,
+    "scientific_result": true,
+    "execution": {
+      "walltime_recovery": "resume only after a complete online iteration",
+      "completed_iteration_contract": "model shard index and every referenced shard plus multitrace receipt; DCoLT additionally requires dcolt_upm.pt",
+      "partial_iteration_contract": "fail closed; archive the partial iteration with provenance and recompute that iteration",
+      "evaluation_recovery": "reuse complete deterministic evaluation shards and recompute only missing shards"
+    },
+    "evaluation": {
+      "split": "final_unseen",
+      "n_games": 134,
+      "samples_per_task": 1,
+      "temperature": 0.3,
+      "paired_eval_seeds": [62001, 62002, 62003]
+    }
+  },
+  "neda": {
+    "credit": "A_i/H_i times a conservative mixture of uniform and normalized executed-Action log-probability evidence over denoising steps",
+    "interpolation_lambda": 0.5,
+    "evidence_temperature": 0.25
+  },
+  "mapg": {
+    "position_policy": "Plackett-Luce over maximum SDAR vocabulary logits",
+    "clipping": "separate token and position GSPO-style ratios"
+  },
+  "dcolt": {
+    "position_policy": "one-block learned SDAR unmasking-policy module",
+    "clipping": "joint token plus UPM position trajectory ratio"
+  }
+}

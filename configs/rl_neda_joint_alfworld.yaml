@@ -10,8 +10,8 @@ experiment:
   num_node: 1
 
 model:
-  pretrained_model: "sft_neda/ckpt/neda_sft_v1"
-  optimized_name: "neda_v2_policy"
+  pretrained_model: "JetLM/SDAR-8B-Chat"
+  optimized_name: "joint_policy"
 
 dataset:
   thought_optimization_path: "/ABSOLUTE/PATH/TO/thought_learner.json"

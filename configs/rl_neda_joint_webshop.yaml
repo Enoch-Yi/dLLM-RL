@@ -10,7 +10,7 @@ experiment:
   num_node: 1
 
 model:
-  pretrained_model: "/home/zhangzy/.raiden/neda-2410/models/SDAR-8B-Chat"
+  pretrained_model: "JetLM/SDAR-8B-Chat"
   optimized_name: "joint_webshop_policy"
 
 dataset:

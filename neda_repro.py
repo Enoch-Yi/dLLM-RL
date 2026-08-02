@@ -50,22 +50,35 @@ def portable_model_identity_payload(identity: Mapping[str, Any]) -> Dict[str, An
         "model_class",
         "forward_source_sha256",
     )
+    has_weight_hashes = any(
+        str(shard.get("sha256", ""))
+        for shard in identity.get("weight_shards", [])
+    )
     payload: Dict[str, Any] = {
-        "contract_version": "neda-model-portable-identity-v1",
+        "contract_version": (
+            "neda-model-portable-identity-v2"
+            if has_weight_hashes
+            else "neda-model-portable-identity-v1"
+        ),
     }
     for key in keys:
         if key in identity:
             payload[key] = identity[key]
-    payload["weight_shards"] = sorted(
-        [
-            {
-                "name": str(shard["name"]),
-                "size_bytes": int(shard["size_bytes"]),
-            }
-            for shard in identity.get("weight_shards", [])
-        ],
-        key=lambda shard: shard["name"],
-    )
+    shards = []
+    for shard in identity.get("weight_shards", []):
+        value = {
+            "name": str(shard["name"]),
+            "size_bytes": int(shard["size_bytes"]),
+        }
+        if shard.get("sha256"):
+            digest = str(shard["sha256"])
+            if len(digest) != 64 or any(
+                character not in "0123456789abcdef" for character in digest
+            ):
+                raise ValueError("invalid weight-shard SHA-256")
+            value["sha256"] = digest
+        shards.append(value)
+    payload["weight_shards"] = sorted(shards, key=lambda shard: shard["name"])
     return payload
 
 
@@ -117,6 +130,32 @@ def build_model_identity(model_dir: Union[os.PathLike, str], model_class: Any = 
         payload["forward_source_sha256"] = sha256_file(source)
 
     index_path = root / "model.safetensors.index.json"
+    weight_manifest_path = root / "WEIGHTS.SHA256SUMS"
+    weight_hashes: Dict[str, str] = {}
+    if weight_manifest_path.is_file():
+        for raw_line in weight_manifest_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            parts = line.split(None, 1)
+            if len(parts) != 2:
+                raise ValueError("malformed WEIGHTS.SHA256SUMS line")
+            digest, raw_name = parts
+            name = os.path.basename(raw_name.lstrip("*"))
+            if (
+                len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+                or name in weight_hashes
+            ):
+                raise ValueError("invalid WEIGHTS.SHA256SUMS entry")
+            weight_hashes[name] = digest
+        payload["weight_manifest"] = str(weight_manifest_path.resolve())
+        payload["weight_manifest_sha256"] = sha256_file(weight_manifest_path)
+    elif os.environ.get("NEDA_REQUIRE_WEIGHT_HASH_IDENTITY", "0") == "1":
+        raise FileNotFoundError(
+            "weight-authenticated model identity requires WEIGHTS.SHA256SUMS: "
+            + str(root)
+        )
     shards = []
     if index_path.is_file():
         with index_path.open("r", encoding="utf-8") as handle:
@@ -126,8 +165,22 @@ def build_model_identity(model_dir: Union[os.PathLike, str], model_class: Any = 
             if not shard.exists():
                 raise FileNotFoundError(f"model shard listed by index is missing: {shard}")
             resolved = shard.resolve()
-            shards.append(
-                {"name": name, "resolved_path": str(resolved), "size_bytes": resolved.stat().st_size}
+            value = {
+                "name": name,
+                "resolved_path": str(resolved),
+                "size_bytes": resolved.stat().st_size,
+            }
+            if weight_hashes:
+                if name not in weight_hashes:
+                    raise ValueError(
+                        "weight manifest does not authenticate indexed shard: " + name
+                    )
+                value["sha256"] = weight_hashes[name]
+            shards.append(value)
+        unexpected = sorted(set(weight_hashes) - {shard["name"] for shard in shards})
+        if unexpected:
+            raise ValueError(
+                "weight manifest contains unindexed shards: " + ", ".join(unexpected)
             )
     payload["weight_shards"] = shards
     portable_sha = portable_model_identity_sha256(payload)

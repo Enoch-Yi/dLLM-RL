@@ -17,6 +17,7 @@ import os
 import shutil
 import sys
 import time
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence
 
@@ -28,7 +29,7 @@ import torch
 import torch.nn.functional as F
 from accelerate import Accelerator
 from accelerate.logging import get_logger
-from accelerate.utils import DistributedType, set_seed
+from accelerate.utils import DistributedType, InitProcessGroupKwargs, set_seed
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
@@ -354,6 +355,8 @@ def _projected_logp(
             start_pos + 2 * width, start_pos, block_size, device=extended.device
         )
     position_decision = batch.get("position_decision")
+    registered_method = str(batch.get("registered_method", ""))
+    is_dcolt = registered_method == "dcolt"
     position_kwargs = {}
     if position_decision is not None and str(
         position_decision.get("policy")
@@ -380,6 +383,31 @@ def _projected_logp(
             "position_mask_index": batch["position_mask_index"],
             "position_current_block": current_block,
         }
+    elif is_dcolt:
+        # ZeRO-3 requires every rank to traverse the same parameter graph in
+        # the same order.  Native replay deliberately interleaves Thought
+        # rows (which have a learned DCoLT position decision) and Action rows
+        # (which do not).  Before this dummy branch, a distributed microstep
+        # could therefore run the 252.8M-parameter UPM on only some ranks;
+        # job 18455153 then observed an UPM ALLGATHER on rank 0 while the
+        # other ranks had already reached a BROADCAST, and timed out.
+        #
+        # Action credit remains token-only.  These shape-valid inputs merely
+        # execute the UPM collectively; the zero-valued graph anchor below
+        # makes its mathematical contribution exactly zero while retaining
+        # identical forward/backward parameter hooks on every rank.
+        dummy_mask = torch.zeros(
+            (1, width), dtype=torch.bool, device=extended.device
+        )
+        position_kwargs = {
+            "position_response_start": start_pos,
+            "position_response_width": width,
+            "position_timestep": torch.zeros(
+                1, dtype=torch.float32, device=extended.device
+            ),
+            "position_mask_index": dummy_mask,
+            "position_current_block": dummy_mask.clone(),
+        }
     outputs = model(
         input_ids=extended,
         attention_mask=attention,
@@ -401,6 +429,17 @@ def _projected_logp(
     ).squeeze(-1)
     scores = torch.zeros_like(batch["labels"], dtype=torch.float32)
     scores[prediction_mask] = selected_scores
+    if is_dcolt:
+        if outputs.position_logits is None:
+            raise RuntimeError(
+                "DCoLT collective-safe replay requires an UPM forward on "
+                "every native row"
+            )
+        # Preserve the UPM autograd hooks even for Action rows and for forced
+        # final Thought commitments whose Plackett--Luce term is exactly zero.
+        # This scalar is identically zero and cannot change token log-probs or
+        # the registered DCoLT objective.
+        scores = scores + outputs.position_logits.float().sum() * 0.0
     entropy_values = -(
         selected_log_probs.exp() * selected_log_probs
     ).sum(dim=-1)
@@ -472,6 +511,7 @@ def main() -> None:
     if str(config.training.method) != "exact_multitrace":
         raise ValueError("multitrace learner requires training.method=exact_multitrace")
     seed = int(config.training.get("train_seed", config.training.seed))
+    registered_method = str(config.training.get("registered_method", "neda"))
     set_seed(seed)
     if bool(config.training.enable_tf32):
         raise ValueError("recorded-path multitrace learner requires TF32 disabled")
@@ -479,6 +519,23 @@ def main() -> None:
     config.experiment.logging_dir = str(Path(config.experiment.project) / "logs")
     wandb_mode = os.environ.get("WANDB_MODE", "online").strip().lower()
     wandb_tracking_requested = wandb_mode != "disabled"
+    accelerator_kwargs = {}
+    process_group_timeout_seconds = None
+    if registered_method == "dcolt":
+        process_group_timeout_seconds = int(
+            os.environ.get("NEDA_DCOLT_PROCESS_GROUP_TIMEOUT_SECONDS", "3600")
+        )
+        if not 600 <= process_group_timeout_seconds <= 7200:
+            raise ValueError("DCoLT process-group timeout must be in [600, 7200]")
+        # This handler must be passed by the learner at the first Accelerator
+        # construction.  Wrapping the entry point after Accelerate/DeepSpeed
+        # has initialized its state leaves the default 600-second watchdog in
+        # place, which is exactly what jobs 18454571/18454572 exposed.
+        accelerator_kwargs["kwargs_handlers"] = [
+            InitProcessGroupKwargs(
+                timeout=timedelta(seconds=process_group_timeout_seconds)
+            )
+        ]
     accelerator = Accelerator(
         gradient_accumulation_steps=int(config.training.gradient_accumulation_steps),
         mixed_precision=str(config.training.mixed_precision),
@@ -489,6 +546,7 @@ def main() -> None:
         # therefore receive a different complete row; a size-one batch cannot
         # be split across processes.
         split_batches=False,
+        **accelerator_kwargs,
     )
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -525,7 +583,6 @@ def main() -> None:
     base_model = SDARForCausalLM.from_pretrained(
         pretrained_model, trust_remote_code=True, torch_dtype="auto"
     )
-    registered_method = str(config.training.get("registered_method", "neda"))
     position_head_metadata = None
     position_head = None
     if registered_method in WRAPPED_POLICY_METHODS:
@@ -696,15 +753,19 @@ def main() -> None:
             )
         )
 
-    # Freeze every old-policy score before any gradient update, using the same
-    # forward mode as the optimizer.  SDAR's attention-mask dispatch depends
-    # on ``module.training`` even though its configured dropout is zero.  An
-    # eval-mode denominator followed by train-mode numerator therefore makes
-    # the first PPO ratio non-unit, most visibly through DCoLT's learned UPM.
-    # Rollout scores were produced in eval mode, so the drift gate below still
-    # authenticates that the train-mode replay remains within the registered
-    # exact-path tolerance before this denominator is accepted.
-    model.train()
+    # Rollout behavior scores are produced in eval mode.  DCoLT's learned
+    # position head amplifies SDAR's train/eval attention-dispatch difference
+    # (0.080269 in job 18454577), so its denominator and differentiable
+    # numerator must remain in the behavior-policy eval coordinate. ``eval``
+    # does not disable gradients.  Keep the established train coordinate for
+    # MAPG/NeDA so checkpoint continuations remain contract-compatible with
+    # their already accepted iterations; their measured replay drift is below
+    # 5e-7.
+    old_policy_scoring_mode = "eval" if registered_method == "dcolt" else "train"
+    if old_policy_scoring_mode == "eval":
+        model.eval()
+    else:
+        model.train()
     drift = {"thought": [], "action": []}
     position_drift: List[float] = []
     local_drift_coordinates: List[Dict[str, Any]] = []
@@ -944,7 +1005,12 @@ def main() -> None:
         },
         "world_size": int(accelerator.num_processes),
         "rollout_replay_drift": drift_summary,
-        "old_policy_scoring_mode": "train",
+        "old_policy_scoring_mode": old_policy_scoring_mode,
+        "dcolt_collective_graph": (
+            "all-native-rows-upm-zero-anchor-v1"
+            if registered_method == "dcolt" else None
+        ),
+        "process_group_timeout_seconds": process_group_timeout_seconds,
         "tolerances": tolerances,
         "failed_sources": failures,
         "diagnostic_top_k": diagnostic_top_k,
@@ -1411,7 +1477,11 @@ def main() -> None:
             [[row["sample_id"], row["source"], row["round_id"]] for row in native_rows]
         ),
         "rollout_replay_drift": drift_summary,
-        "old_policy_scoring_mode": "train",
+        "old_policy_scoring_mode": old_policy_scoring_mode,
+        "dcolt_collective_graph": (
+            "all-native-rows-upm-zero-anchor-v1"
+            if registered_method == "dcolt" else None
+        ),
         "replay_diagnostic": os.path.realpath(str(diagnostic_path)),
         "replay_diagnostic_sha256": sha256_file(str(diagnostic_path)),
         "initial_ratio_max_abs_error": initial_ratio_error,

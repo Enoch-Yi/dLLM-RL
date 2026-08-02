@@ -5,6 +5,7 @@ __pycache__/
 *.err
 core
 core.*
+core-*
 
 # NeDA runtime products are intentionally outside source control.
 artifacts/

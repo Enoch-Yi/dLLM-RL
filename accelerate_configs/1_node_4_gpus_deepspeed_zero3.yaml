@@ -1,0 +1,23 @@
+compute_environment: LOCAL_MACHINE
+deepspeed_config:
+  deepspeed_multinode_launcher: standard
+  gradient_clipping: 1.0
+  # 4×80GB:ZeRO-3 分片后模型状态 32GB/卡,+激活(grad ckpt)~48GB,80GB 装得下,
+  # 故不开 offload(offload 会因每步 PCIe 传优化器状态拖慢 ~2x,4 卡已减半算力,不值)。
+  zero3_init_flag: true
+  zero3_save_16bit_model: true
+  zero_stage: 3
+  zero_optimization:
+    overlap_comm: false
+distributed_type: DEEPSPEED
+downcast_bf16: 'no'
+main_training_function: main
+mixed_precision: bf16
+num_machines: 1
+num_processes: 4
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false
